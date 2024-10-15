@@ -1,4 +1,6 @@
-
+# Jai Ravula 
+# Created 10/12/2024
+# Latest Update 10/15/2024
 
 opcodes: dict = {
     "0" : "R",
@@ -157,6 +159,55 @@ def signed_binary_to_decimal(binary: str) -> str:
         decimal_value = int(binary, 2)
     return str(decimal_value)
 
+def dissasemble_instruction(binary_str: str) -> str:
+    try:
+        mips_instruction: str = ""
+        opcode: str = binary_str[0:6]
+        if opcode == "000000":
+            # Execute R type dissasembly
+            func: str = function_codes[binary_to_decimal(binary_str[26:32])] + ' '
+            rs: str = registers[binary_to_decimal(binary_str[6:11])]
+            rt: str = registers[binary_to_decimal(binary_str[11:16])]
+            rd: str = registers[binary_to_decimal(binary_str[16:21])]
+            shamt: str = binary_to_decimal(binary_str[21:26])
+            if func == "sll " or func == "srl ":
+                mips_instruction = func + rd + ', ' + rt + ', ' + shamt
+            else:
+                mips_instruction = func + rd + ', ' + rs + ', ' + rt
+
+
+        elif opcode == "000010" or opcode == "000011":
+            # Execute J type dissasembly
+            func: str = opcodes[binaryto_decimal(opcode)]
+            imm: str = binary_str(binary_str[6:32])
+            if opcode == "000010":
+                mips_instruction = func + ' ' + imm
+            else:
+                mips_instruction = func + ' ' + imm
+
+        else:
+            imm_labeled = ["beq", "bne"]
+            imm_offsets = ["lbu", "lhu", "ll", "lw", "sb", "sw", "sc", "sh"]
+            # Execute I type dissasembly
+            func: str = opcodes[binary_to_decimal(opcode)]
+            rs: str = registers[binary_to_decimal(binary_str[6:11])]
+            rt: str = registers[binary_to_decimal(binary_str[11:16])]
+            imm: str = binary_to_decimal(binary_str[16:32])
+
+            if func in imm_labeled:
+                imm = signed_binary_to_decimal(binary_str[16:32])
+                mips_instruction = func + ' ' + rs + ', ' + rt + ', ' + imm
+            elif func in imm_offsets:
+                mips_instruction = func + ' ' + rt + ', ' + imm + '( ' + rs + ' )'
+            else:
+                mips_instruction = func + ' ' + rs + ', ' + rt + ', ' + imm
+    
+    except:
+        print("Invalid Instruction, dissasembly stopped!")
+        return ""
+
+    return mips_instruction
+
 def read_file(filepath: str):
     with open(filepath, 'r') as file:
         instructions_array = []
@@ -164,54 +215,17 @@ def read_file(filepath: str):
             line.strip()
             binary_str = hex_to_binary(line)
             mips_code = dissasemble_instruction(binary_str) 
+            if mips_code == "":
+                return []
             instructions_array.append(mips_code)
     return instructions_array
 
-def dissasemble_instruction(binary_str: str) -> str:
-    mips_instruction: str = ""
-    opcode: str = binary_str[0:6]
-    if opcode == "000000":
-        # Execute R type dissasembly
-        func: str = function_codes[binary_to_decimal(binary_str[26:32])] + ' '
-        rs: str = registers[binary_to_decimal(binary_str[6:11])]
-        rt: str = registers[binary_to_decimal(binary_str[11:16])]
-        rd: str = registers[binary_to_decimal(binary_str[16:21])]
-        shamt: str = binary_to_decimal(binary_str[21:26])
-        if func == "sll " or func == "srl ":
-            mips_instruction = func + rd + ', ' + rt + ', ' + shamt
-        else:
-            mips_instruction = func + rd + ', ' + rs + ', ' + rt
-
-
-    elif opcode == "000010" or opcode == "000011":
-        # Execute J type dissasembly
-        func: str = opcodes[binaryto_decimal(opcode)]
-        imm: str = binary_str(binary_str[6:32])
-        if opcode == "000010":
-            mips_instruction = func + ' ' + imm
-        else:
-            mips_instruction = func + ' ' + imm
-
-    else:
-        imm_labeled = ["beq", "bne"]
-        imm_offsets = ["lbu", "lhu", "ll", "lw", "sb", "sw", "sc", "sh"]
-        # Execute I type dissasembly
-        func: str = opcodes[binary_to_decimal(opcode)]
-        rs: str = registers[binary_to_decimal(binary_str[6:11])]
-        rt: str = registers[binary_to_decimal(binary_str[11:16])]
-        imm: str = binary_to_decimal(binary_str[16:32])
-
-        if func in imm_labeled:
-            imm = signed_binary_to_decimal(binary_str[16:32])
-            mips_instruction = func + ' ' + rs + ', ' + rt + ', ' + imm
-        elif func in imm_offsets:
-            mips_instruction = func + ' ' + rt + ', ' + imm + '( ' + rs + ' )'
-        else:
-            mips_instruction = func + ' ' + rs + ', ' + rt + ', ' + imm
-
-    return mips_instruction
-
 def format_mips(instructions_array):
+
+    if instructions_array == []:
+        print("Instruction Set Cannot be disassembled")
+        return
+
     label_map = {}
     label_count = 0
 
@@ -235,17 +249,31 @@ def format_mips(instructions_array):
                 instructions_array[i] = ','.join(splits)
 
     final_output = []
+
+    final_output.append(".globl     main \n.data \n.text \n main:")
     for i, instruction in enumerate(instructions_array):
         if i in label_map:
-            final_output.append(f"{label_map[i]}:")
+            final_output.append(f"  {label_map[i]}:")
         
-        final_output.append(f"  {instruction}")
+        final_output.append(f"      {instruction}")
+    final_output.append("  ori $v0, $0, 10 \n  syscall")
+
 
     for instruction in final_output:
         print(instruction)
+    return final_output
 
+def create_file(filename: str):
+    instructions = read_file(f'./Test Cases/{filename}')
+    result = format_mips(instructions)
 
+    output_filename = filename.rsplit('.', 1)[0] + ".s"
+
+    with open(output_filename, 'w') as f:
+        for instruction in result:
+            f.write(instruction + '\n')
+
+    print(f"Assembly code has been written to {output_filename}")
 
 if __name__ == "__main__":
-    instructions = read_file('./Test Cases/test_case3.obj')
-    format_mips(instructions)
+    create_file('test_case3.obj')
